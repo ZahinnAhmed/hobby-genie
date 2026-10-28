@@ -1,9 +1,15 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 
 const app = express();
+const IS_PROD = process.env.NODE_ENV === 'production';
+// Render/Heroku-style hosts sit behind a proxy; needed for correct https detection.
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 
@@ -137,7 +143,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
     res.setHeader(
       'Set-Cookie',
-      `hg_sid=${sid}; HttpOnly; Path=/; Max-Age=${7 * 24 * 3600}; SameSite=Lax`
+      `hg_sid=${sid}; HttpOnly; Path=/; Max-Age=${7 * 24 * 3600}; SameSite=Lax${IS_PROD ? '; Secure' : ''}`
     );
     res.redirect(`${CLIENT_URL}/?calendar=connected`);
   } catch (err) {
@@ -382,6 +388,14 @@ app.post('/api/chat', async (req, res) => {
     res.status(500).json({ error: 'Failed to reach Gemini.' });
   }
 });
+
+// In production, serve the built React app from the same origin as the API,
+// so the session cookie and OAuth redirect work without cross-site setup.
+const CLIENT_BUILD = path.join(path.dirname(fileURLToPath(import.meta.url)), '../client/build');
+if (fs.existsSync(CLIENT_BUILD)) {
+  app.use(express.static(CLIENT_BUILD));
+  app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(CLIENT_BUILD, 'index.html')));
+}
 
 app.listen(PORT, () => {
   console.log(`HobbyGenie server on http://localhost:${PORT} (model: ${GEMINI_MODEL}, search: ${GEMINI_SEARCH}, key: ${GEMINI_API_KEY ? 'set' : 'MISSING'}, google oauth: ${GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET ? 'set' : 'MISSING'})`);

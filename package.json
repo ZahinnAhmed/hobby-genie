@@ -1,0 +1,11 @@
+{
+  "name": "hobby-genie",
+  "private": true,
+  "scripts": {
+    "build": "npm ci --prefix server && npm ci --prefix client && npm run build --prefix client",
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
